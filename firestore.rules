@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: uid
+    // Fields:
+    //   - uid: string (required, immutable)
+    //   - displayName: string (required)
+    //   - shortId: string (required, immutable, 6 chars)
+    //   - photoURL: string (optional)
+    //   - createdAt: timestamp (required, immutable)
+    //
+    // Collection: shortIds
+    // Document ID: shortId (6 chars)
+    // Fields:
+    //   - uid: string (required, immutable)
+    //
+    // Collection: chats
+    // Document ID: chatId
+    // Fields:
+    //   - chatId: string (required, immutable)
+    //   - participants: list (required, size 2)
+    //   - lastMessage: string (optional)
+    //   - updatedAt: timestamp (required)
+    //
+    // Collection: chats/{chatId}/messages
+    // Document ID: messageId
+    // Fields:
+    //   - messageId: string (required, immutable)
+    //   - chatId: string (required, immutable)
+    //   - senderId: string (required, immutable)
+    //   - encryptedContent: string (required, max size 5000)
+    //   - timestamp: timestamp (required, immutable)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isParticipant(participants) {
+      return isAuthenticated() && request.auth.uid in participants;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'shortId', 'createdAt']) &&
+             data.uid is string && data.uid == request.auth.uid &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             data.shortId is string && data.shortId.size() == 6 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidChat(data) {
+      return data.keys().hasAll(['chatId', 'participants', 'updatedAt']) &&
+             data.chatId is string &&
+             data.participants is list && data.participants.size() == 2 &&
+             isAuthenticated() && request.auth.uid in data.participants &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['messageId', 'chatId', 'senderId', 'encryptedContent', 'timestamp']) &&
+             data.messageId is string &&
+             data.chatId is string &&
+             data.senderId is string && data.senderId == request.auth.uid &&
+             data.encryptedContent is string && data.encryptedContent.size() > 0 && data.encryptedContent.size() < 5000 &&
+             data.timestamp is timestamp;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "petedianolabs@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{uid} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(uid) && isValidUser(request.resource.data);
+      allow update: if isOwner(uid) && isValidUser(request.resource.data) &&
+                      request.resource.data.uid == resource.data.uid &&
+                      request.resource.data.shortId == resource.data.shortId &&
+                      request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    match /shortIds/{shortId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                      request.resource.data.uid == request.auth.uid &&
+                      shortId.size() == 6;
+      // No updates or deletes for shortIds to ensure permanent mapping
+    }
+
+    match /chats/{chatId} {
+      allow read: if isParticipant(resource.data.participants);
+      allow create: if isValidChat(request.resource.data);
+      allow update: if isParticipant(resource.data.participants) &&
+                      isValidChat(request.resource.data) &&
+                      request.resource.data.chatId == resource.data.chatId &&
+                      request.resource.data.participants == resource.data.participants;
+
+      match /messages/{messageId} {
+        allow read: if isParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow create: if isParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants) &&
+                        isValidMessage(request.resource.data);
+        // Messages are immutable
+      }
+    }
+  }
+}

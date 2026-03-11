@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "User's display name" },
+        "shortId": { "type": "string", "description": "Unique 6-character ID" },
+        "publicKey": { "type": "string", "description": "Public key for end-to-end encryption" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" }
+      },
+      "required": ["uid", "shortId", "publicKey"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "A conversation between two users.",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string", "description": "Unique chat ID" },
+        "participants": { "type": "array", "items": { "type": "string" }, "description": "UIDs of the participants" },
+        "lastMessage": { "type": "string", "description": "Encrypted last message content" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last activity timestamp" }
+      },
+      "required": ["chatId", "participants", "updatedAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A message within a chat.",
+      "type": "object",
+      "properties": {
+        "messageId": { "type": "string", "description": "Unique message ID" },
+        "chatId": { "type": "string", "description": "ID of the chat this message belongs to" },
+        "senderId": { "type": "string", "description": "UID of the sender" },
+        "encryptedContent": { "type": "string", "description": "Encrypted message content" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Message timestamp" }
+      },
+      "required": ["messageId", "chatId", "senderId", "encryptedContent", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Chat metadata"
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages within a chat"
+    }
+  }
+}
