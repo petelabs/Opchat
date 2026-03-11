@@ -66,18 +66,24 @@ service cloud.firestore {
     function isValidChat(data) {
       return data.keys().hasAll(['chatId', 'participants', 'updatedAt']) &&
              data.chatId is string &&
-             data.participants is list && data.participants.size() == 2 &&
+             data.participants is list && data.participants.size() >= 2 &&
              isAuthenticated() && request.auth.uid in data.participants &&
-             data.updatedAt is timestamp;
+             data.updatedAt is timestamp &&
+             (!('isGroup' in data) || data.isGroup is bool) &&
+             (!('groupName' in data) || (data.groupName is string && data.groupName.size() < 100)) &&
+             (!('groupAdmin' in data) || data.groupAdmin is string);
     }
 
     function isValidMessage(data) {
-      return data.keys().hasAll(['messageId', 'chatId', 'senderId', 'encryptedContent', 'timestamp']) &&
+      return data.keys().hasAll(['messageId', 'chatId', 'senderId', 'timestamp']) &&
              data.messageId is string &&
              data.chatId is string &&
              data.senderId is string && data.senderId == request.auth.uid &&
-             data.encryptedContent is string && data.encryptedContent.size() > 0 && data.encryptedContent.size() < 5000 &&
-             data.timestamp is timestamp;
+             data.timestamp is timestamp &&
+             (
+               ('encryptedContent' in data && data.encryptedContent is string && data.encryptedContent.size() < 5000) ||
+               ('mediaUrl' in data && data.mediaUrl is string)
+             );
     }
 
     function isAdmin() {
@@ -112,8 +118,7 @@ service cloud.firestore {
       allow create: if isValidChat(request.resource.data);
       allow update: if isParticipant(resource.data.participants) &&
                       isValidChat(request.resource.data) &&
-                      request.resource.data.chatId == resource.data.chatId &&
-                      request.resource.data.participants == resource.data.participants;
+                      request.resource.data.chatId == resource.data.chatId;
 
       match /messages/{messageId} {
         allow read: if isParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants);

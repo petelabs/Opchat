@@ -4,7 +4,13 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, setDoc
 import { UserProfile, OperationType } from '../types';
 import { handleFirestoreError } from '../utils/error-handler';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Search, UserPlus, AlertCircle, User } from 'lucide-react';
+import { X, Search, UserPlus, AlertCircle, User, Users, Plus } from 'lucide-react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 interface NewChatModalProps {
   isOpen: boolean;
@@ -13,7 +19,10 @@ interface NewChatModalProps {
 }
 
 const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose, onChatCreated }) => {
+  const [mode, setMode] = useState<'direct' | 'group'>('direct');
   const [shortId, setShortId] = useState('');
+  const [groupName, setGroupName] = useState('');
+  const [groupMembers, setGroupMembers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [foundUser, setFoundUser] = useState<UserProfile | null>(null);
@@ -21,11 +30,7 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose, onChatCrea
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (shortId.length !== 6) return;
-    if (shortId.toUpperCase() === (auth.currentUser as any)?.shortId) {
-      setError("You cannot chat with yourself.");
-      return;
-    }
-
+    
     setLoading(true);
     setError(null);
     setFoundUser(null);
@@ -39,7 +44,9 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose, onChatCrea
       } else {
         const userData = querySnapshot.docs[0].data() as UserProfile;
         if (userData.uid === auth.currentUser?.uid) {
-           setError("You cannot chat with yourself.");
+           setError("You cannot add yourself.");
+        } else if (groupMembers.some(m => m.uid === userData.uid)) {
+           setError("User already added to group.");
         } else {
            setFoundUser(userData);
         }
@@ -51,28 +58,59 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose, onChatCrea
     }
   };
 
+  const addMember = () => {
+    if (foundUser) {
+      setGroupMembers([...groupMembers, foundUser]);
+      setFoundUser(null);
+      setShortId('');
+    }
+  };
+
+  const removeMember = (uid: string) => {
+    setGroupMembers(groupMembers.filter(m => m.uid !== uid));
+  };
+
   const startChat = async () => {
-    if (!foundUser || !auth.currentUser) return;
-
-    setLoading(true);
-    try {
-      // Check if chat already exists
-      const participants = [auth.currentUser.uid, foundUser.uid].sort();
-      const chatId = participants.join('_');
-
-      // Create or update chat metadata
-      await setDoc(doc(db, 'chats', chatId), {
-        chatId,
-        participants,
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-
-      onChatCreated(chatId);
-      onClose();
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'chats');
-    } finally {
-      setLoading(false);
+    if (mode === 'direct') {
+      if (!foundUser || !auth.currentUser) return;
+      setLoading(true);
+      try {
+        const participants = [auth.currentUser.uid, foundUser.uid].sort();
+        const chatId = participants.join('_');
+        await setDoc(doc(db, 'chats', chatId), {
+          chatId,
+          participants,
+          updatedAt: serverTimestamp(),
+          isGroup: false
+        }, { merge: true });
+        onChatCreated(chatId);
+        onClose();
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'chats');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      if (!groupName || groupMembers.length === 0 || !auth.currentUser) return;
+      setLoading(true);
+      try {
+        const participants = [auth.currentUser.uid, ...groupMembers.map(m => m.uid)];
+        const chatId = `group_${Date.now()}_${auth.currentUser.uid}`;
+        await setDoc(doc(db, 'chats', chatId), {
+          chatId,
+          participants,
+          updatedAt: serverTimestamp(),
+          isGroup: true,
+          groupName,
+          groupAdmin: auth.currentUser.uid
+        });
+        onChatCreated(chatId);
+        onClose();
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'chats');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -84,88 +122,134 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose, onChatCrea
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transition-colors"
           >
             <div className="p-4 bg-emerald-600 text-white flex items-center justify-between shadow-lg">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white/10 rounded-lg">
-                  <UserPlus size={20} />
+                  {mode === 'direct' ? <UserPlus size={20} /> : <Users size={20} />}
                 </div>
-                <h2 className="font-bold text-lg">Start New Chat</h2>
+                <h2 className="font-bold text-lg">{mode === 'direct' ? 'Start New Chat' : 'Create New Group'}</h2>
               </div>
               <button onClick={onClose} className="p-2 hover:bg-emerald-700 rounded-full transition-all active:scale-90">
                 <X size={20} />
               </button>
             </div>
 
-            <div className="p-8">
-              <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-                Enter the <span className="font-bold text-emerald-600">6-character unique ID</span> of the person you want to chat with. No phone numbers required.
-              </p>
+            <div className="p-6">
+              {/* Tabs */}
+              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mb-6">
+                <button
+                  onClick={() => setMode('direct')}
+                  className={cn(
+                    "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
+                    mode === 'direct' ? "bg-white dark:bg-slate-700 text-emerald-600 shadow-sm" : "text-slate-500"
+                  )}
+                >
+                  Direct
+                </button>
+                <button
+                  onClick={() => setMode('group')}
+                  className={cn(
+                    "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
+                    mode === 'group' ? "bg-white dark:bg-slate-700 text-emerald-600 shadow-sm" : "text-slate-500"
+                  )}
+                >
+                  Group
+                </button>
+              </div>
 
-              <form onSubmit={handleSearch} className="flex gap-3 mb-8">
-                <div className="relative flex-1">
+              {mode === 'group' && (
+                <div className="mb-6">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Group Name</label>
                   <input
                     type="text"
-                    placeholder="E.g. XJ92K1"
-                    maxLength={6}
-                    className="w-full pl-5 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-mono text-xl tracking-[0.3em] uppercase focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all shadow-inner"
-                    value={shortId}
-                    onChange={(e) => setShortId(e.target.value.toUpperCase())}
+                    placeholder="Enter group name"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white transition-all"
+                    value={groupName}
+                    onChange={(e) => setGroupName(e.target.value)}
                   />
                 </div>
+              )}
+
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                {mode === 'direct' ? 'Find User by ID' : 'Add Members by ID'}
+              </label>
+              <form onSubmit={handleSearch} className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  placeholder="XJ92K1"
+                  maxLength={6}
+                  className="flex-1 px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono text-lg tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white transition-all"
+                  value={shortId}
+                  onChange={(e) => setShortId(e.target.value.toUpperCase())}
+                />
                 <button
                   type="submit"
                   disabled={shortId.length !== 6 || loading}
-                  className="px-6 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-lg shadow-emerald-100 active:scale-95"
+                  className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:bg-slate-200 transition-all active:scale-95"
                 >
-                  {loading ? (
-                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <Search size={24} />
-                  )}
+                  {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Search size={20} />}
                 </button>
               </form>
 
               {error && (
-                <motion.div 
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="flex items-center gap-2 text-red-500 bg-red-50 p-3 rounded-xl mb-4 text-sm"
-                >
-                  <AlertCircle size={16} />
+                <div className="flex items-center gap-2 text-red-500 bg-red-50 dark:bg-red-900/20 p-3 rounded-xl mb-4 text-xs font-medium">
+                  <AlertCircle size={14} />
                   {error}
-                </motion.div>
+                </div>
               )}
 
               {foundUser && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex items-center justify-between shadow-sm"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-full bg-white overflow-hidden shadow-sm ring-2 ring-emerald-500/10">
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-xl border border-emerald-100 dark:border-emerald-800/50 flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 overflow-hidden shadow-sm">
                       {foundUser.photoURL ? (
-                        <img src={foundUser.photoURL} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <img src={foundUser.photoURL} alt="Avatar" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-emerald-100 text-emerald-600">
-                          <User size={28} />
+                          <User size={18} />
                         </div>
                       )}
                     </div>
                     <div>
-                      <p className="font-bold text-slate-900 text-lg leading-tight">{foundUser.displayName}</p>
-                      <p className="text-xs text-emerald-600 font-mono font-black tracking-widest uppercase mt-1">{foundUser.shortId}</p>
+                      <p className="font-bold text-slate-900 dark:text-white text-sm">{foundUser.displayName}</p>
+                      <p className="text-[10px] text-emerald-600 font-mono font-black">{foundUser.shortId}</p>
                     </div>
                   </div>
                   <button
-                    onClick={startChat}
-                    className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-md active:scale-95"
+                    onClick={mode === 'direct' ? startChat : addMember}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-all"
                   >
-                    Chat
+                    {mode === 'direct' ? 'Chat' : 'Add'}
                   </button>
-                </motion.div>
+                </div>
+              )}
+
+              {mode === 'group' && groupMembers.length > 0 && (
+                <div className="mb-6">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Members ({groupMembers.length})</label>
+                  <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
+                    {groupMembers.map(member => (
+                      <div key={member.uid} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{member.displayName}</span>
+                        <button onClick={() => removeMember(member.uid)} className="text-slate-400 hover:text-red-500">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {mode === 'group' && (
+                <button
+                  onClick={startChat}
+                  disabled={!groupName || groupMembers.length === 0 || loading}
+                  className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 transition-all shadow-xl shadow-emerald-100 dark:shadow-none active:scale-95"
+                >
+                  Create Group
+                </button>
               )}
             </div>
           </motion.div>

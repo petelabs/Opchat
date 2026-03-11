@@ -20,6 +20,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeChat, setActiveChat] = useState<ChatMetadata | null>(null);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
+  const [isGettingReady, setIsGettingReady] = useState(false);
   
   // Call states
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
@@ -31,6 +32,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
       if (authUser) {
         setUser(authUser);
+        setIsGettingReady(true);
         try {
           // Check if user profile exists
           const userDoc = await getDoc(doc(db, 'users', authUser.uid));
@@ -67,11 +69,14 @@ export default function App() {
           }
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, 'users');
+        } finally {
+          setTimeout(() => setIsGettingReady(false), 1500);
         }
       } else {
         setUser(null);
         setUserProfile(null);
         setActiveChat(null);
+        setIsGettingReady(false);
       }
       setLoading(false);
     });
@@ -115,17 +120,17 @@ export default function App() {
     setIsCallModalOpen(true);
   };
 
-  if (loading) {
+  if (loading || isGettingReady) {
     return (
-      <div className="min-h-screen bg-[#f0f2f5] flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-[#f0f2f5] dark:bg-slate-950 flex flex-col items-center justify-center transition-colors duration-500">
         <motion.div
           animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }}
           transition={{ repeat: Infinity, duration: 2 }}
-          className="w-20 h-20 bg-emerald-600 rounded-3xl flex items-center justify-center mb-8 shadow-2xl shadow-emerald-200"
+          className="w-20 h-20 bg-emerald-600 rounded-3xl flex items-center justify-center mb-8 shadow-2xl shadow-emerald-200 dark:shadow-emerald-900/20"
         >
           <MessageSquare className="text-white w-10 h-10" />
         </motion.div>
-        <div className="w-56 h-1.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
+        <div className="w-56 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
           <motion.div 
             initial={{ x: '-100%' }}
             animate={{ x: '100%' }}
@@ -133,7 +138,9 @@ export default function App() {
             className="w-full h-full bg-emerald-600"
           />
         </div>
-        <p className="mt-6 text-slate-500 text-sm font-bold tracking-widest uppercase">Opchat is loading</p>
+        <p className="mt-6 text-slate-500 dark:text-slate-400 text-sm font-bold tracking-widest uppercase">
+          {isGettingReady ? 'Account ready! Opening chats...' : 'Opchat is loading'}
+        </p>
       </div>
     );
   }
@@ -144,9 +151,9 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="h-screen bg-[#f0f2f5] flex items-center justify-center overflow-hidden font-sans">
+      <div className="h-screen bg-[#f0f2f5] dark:bg-slate-950 flex items-center justify-center overflow-hidden font-sans transition-colors duration-500">
         {/* Main Container */}
-        <div className="w-full h-full md:w-[98%] md:h-[96%] md:max-w-[1700px] bg-white shadow-2xl md:rounded-[2rem] flex overflow-hidden relative border border-slate-200/50">
+        <div className="w-full h-full md:w-[98%] md:h-[96%] md:max-w-[1700px] bg-white dark:bg-slate-900 shadow-2xl md:rounded-[2rem] flex overflow-hidden relative border border-slate-200/50 dark:border-slate-800/50">
           
           {/* Sidebar - Hidden on mobile when chat is active */}
           <div className={`${activeChat ? 'hidden md:flex' : 'flex'} w-full md:w-auto h-full`}>
@@ -167,33 +174,33 @@ export default function App() {
                 onCall={() => activeChat.otherUser && handleStartCall(activeChat.otherUser)}
               />
             ) : (
-              <div className="flex-1 h-full bg-[#f8f9fa] flex flex-col items-center justify-center p-12 text-center relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-50 rounded-full -mr-48 -mt-48 blur-3xl opacity-50"></div>
-                <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-50 rounded-full -ml-48 -mb-48 blur-3xl opacity-50"></div>
+              <div className="flex-1 h-full bg-[#f8f9fa] dark:bg-slate-900/50 flex flex-col items-center justify-center p-12 text-center relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-50 dark:bg-emerald-900/10 rounded-full -mr-48 -mt-48 blur-3xl opacity-50"></div>
+                <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-50 dark:bg-emerald-900/10 rounded-full -ml-48 -mb-48 blur-3xl opacity-50"></div>
                 
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="relative z-10"
                 >
-                  <div className="w-28 h-28 bg-white shadow-xl rounded-[2rem] flex items-center justify-center mx-auto mb-8 border border-slate-100">
+                  <div className="w-28 h-28 bg-white dark:bg-slate-800 shadow-xl rounded-[2rem] flex items-center justify-center mx-auto mb-8 border border-slate-100 dark:border-slate-700">
                     <MessageSquare className="text-emerald-600 w-12 h-12" />
                   </div>
-                  <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Opchat for Web</h2>
-                  <p className="text-slate-500 max-w-md leading-relaxed text-lg font-medium">
+                  <h2 className="text-4xl font-black text-slate-900 dark:text-white mb-4 tracking-tight">Opchat for Web</h2>
+                  <p className="text-slate-500 dark:text-slate-400 max-w-md leading-relaxed text-lg font-medium">
                     Experience professional-grade, end-to-end encrypted messaging. 
                     No phone numbers. Pure privacy.
                   </p>
                   
                   <button 
                     onClick={() => setIsNewChatModalOpen(true)}
-                    className="mt-10 px-8 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 active:scale-95"
+                    className="mt-10 px-8 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 dark:shadow-emerald-900/20 active:scale-95"
                   >
                     Start a New Conversation
                   </button>
                 </motion.div>
 
-                <div className="absolute bottom-12 flex items-center gap-3 text-slate-400 text-sm font-bold uppercase tracking-widest">
+                <div className="absolute bottom-12 flex items-center gap-3 text-slate-400 dark:text-slate-500 text-sm font-bold uppercase tracking-widest">
                   <Shield className="w-4 h-4 text-emerald-500" />
                   End-to-end encrypted
                 </div>

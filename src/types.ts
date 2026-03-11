@@ -11,7 +11,11 @@ export interface ChatMetadata {
   participants: string[];
   lastMessage?: string;
   updatedAt: any;
-  otherUser?: UserProfile; // Populated client-side
+  otherUser?: UserProfile; // Populated client-side for 1-on-1
+  isGroup?: boolean;
+  groupName?: string;
+  groupAdmin?: string;
+  groupPhotoURL?: string;
 }
 
 export interface Message {
@@ -20,6 +24,10 @@ export interface Message {
   senderId: string;
   encryptedContent: string;
   timestamp: any;
+  type?: 'text' | 'image' | 'file';
+  mediaUrl?: string;
+  mediaName?: string;
+  mediaSize?: number;
 }
 
 export enum OperationType {
