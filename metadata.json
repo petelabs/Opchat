@@ -1,5 +1,5 @@
 {
-  "name": "WhisperChat",
-  "description": "A secure, end-to-end encrypted chat app using unique 6-character IDs instead of phone numbers.",
-  "requestFramePermissions": []
+  "name": "Opchat",
+  "description": "A professional, end-to-end encrypted chat app inspired by WhatsApp, using unique 6-character IDs.",
+  "requestFramePermissions": ["camera", "microphone"]
 }

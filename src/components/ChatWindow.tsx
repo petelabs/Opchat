@@ -5,7 +5,7 @@ import { ChatMetadata, Message, OperationType } from '../types';
 import { handleFirestoreError } from '../utils/error-handler';
 import { encryptMessage, decryptMessage } from '../utils/crypto';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, User, MoreVertical, Shield, Lock, ArrowLeft, Paperclip, Smile, Check } from 'lucide-react';
+import { Send, User, MoreVertical, Shield, Lock, ArrowLeft, Paperclip, Smile, Check, CheckCheck, Search, Video } from 'lucide-react';
 import { format } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -17,9 +17,10 @@ function cn(...inputs: ClassValue[]) {
 interface ChatWindowProps {
   chat: ChatMetadata;
   onBack?: () => void;
+  onCall: (type: 'audio' | 'video') => void;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onCall }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -93,39 +94,51 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack }) => {
       <div className="absolute inset-0 opacity-[0.06] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
 
       {/* Header */}
-      <div className="h-16 bg-[#f0f2f5] flex items-center justify-between px-4 shrink-0 border-b border-slate-200 z-10">
+      <div className="h-16 bg-[#f0f2f5] flex items-center justify-between px-4 shrink-0 border-b border-slate-200 z-10 shadow-sm">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="md:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-200 rounded-full">
+          <button onClick={onBack} className="md:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-200 rounded-full transition-all active:scale-90">
             <ArrowLeft size={20} />
           </button>
-          <div className="w-10 h-10 rounded-full bg-slate-300 overflow-hidden border border-white shadow-sm">
+          <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border border-white shadow-sm ring-2 ring-emerald-500/10">
             {chat.otherUser?.photoURL ? (
               <img src={chat.otherUser.photoURL} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
-              <User className="w-full h-full p-2 text-slate-500" />
+              <div className="w-full h-full flex items-center justify-center bg-emerald-100 text-emerald-600">
+                <User size={20} />
+              </div>
             )}
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold text-slate-900">{chat.otherUser?.displayName}</span>
-            <span className="text-[10px] text-slate-500 flex items-center gap-1">
-              <Shield size={10} className="text-emerald-600" />
-              End-to-End Encrypted
+            <span className="text-sm font-bold text-slate-900">{chat.otherUser?.displayName}</span>
+            <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1 uppercase tracking-wider">
+              <Shield size={10} className="fill-emerald-600/20" />
+              Secure ID: {chat.otherUser?.shortId}
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="p-2 text-slate-600 hover:bg-slate-200 rounded-full transition-colors">
+        <div className="flex items-center gap-1">
+          <button 
+            onClick={() => onCall('video')}
+            className="p-2.5 text-emerald-600 hover:bg-emerald-50 rounded-full transition-all active:scale-90"
+            title="Video Call"
+          >
+            <Video size={20} />
+          </button>
+          <button className="p-2.5 text-slate-600 hover:bg-slate-200 rounded-full transition-all active:scale-90">
+            <Search size={20} />
+          </button>
+          <button className="p-2.5 text-slate-600 hover:bg-slate-200 rounded-full transition-all active:scale-90">
             <MoreVertical size={20} />
           </button>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 md:px-8 space-y-2 z-10">
-        <div className="flex justify-center mb-4">
-          <div className="bg-[#fff9c2] text-[11px] text-slate-600 px-3 py-1 rounded-lg shadow-sm flex items-center gap-2 border border-[#e6e0a4]">
-            <Lock size={10} />
-            Messages are end-to-end encrypted. No one outside of this chat can read them.
+      <div className="flex-1 overflow-y-auto p-4 md:px-12 space-y-3 z-10 scrollbar-hide">
+        <div className="flex justify-center mb-6">
+          <div className="bg-[#fff9c2]/90 backdrop-blur-sm text-[11px] text-slate-700 px-4 py-1.5 rounded-xl shadow-sm flex items-center gap-2 border border-[#e6e0a4] font-medium max-w-[90%] text-center">
+            <Lock size={12} className="shrink-0" />
+            Messages are end-to-end encrypted. No one outside of this chat, not even Opchat, can read them.
           </div>
         </div>
 
@@ -151,20 +164,20 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack }) => {
               >
                 <div
                   className={cn(
-                    "max-w-[85%] md:max-w-[70%] px-3 py-1.5 rounded-lg shadow-sm relative group",
+                    "max-w-[85%] md:max-w-[70%] px-3.5 py-2 rounded-2xl shadow-sm relative group",
                     isMe ? "bg-[#d9fdd3] rounded-tr-none" : "bg-white rounded-tl-none"
                   )}
                 >
-                  <p className="text-sm text-slate-900 whitespace-pre-wrap break-words pr-12">
+                  <p className="text-[14.5px] text-slate-900 whitespace-pre-wrap break-words pr-14 leading-relaxed">
                     {decrypted}
                   </p>
                   <div className="absolute bottom-1 right-2 flex items-center gap-1">
-                    <span className="text-[10px] text-slate-500">
+                    <span className="text-[10px] text-slate-500 font-medium">
                       {time}
                     </span>
                     {isMe && (
-                      <span className="text-emerald-500">
-                        <Check size={12} />
+                      <span className="text-[#53bdeb]">
+                        <CheckCheck size={14} />
                       </span>
                     )}
                   </div>

@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { UserProfile, ChatMetadata, OperationType } from './types';
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
+import { UserProfile, ChatMetadata, OperationType, Call } from './types';
 import { handleFirestoreError } from './utils/error-handler';
 import { generateShortId } from './utils/crypto';
 import Auth from './components/Auth';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import NewChatModal from './components/NewChatModal';
+import CallModal from './components/CallModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageSquare, Shield, Lock } from 'lucide-react';
@@ -19,6 +20,12 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeChat, setActiveChat] = useState<ChatMetadata | null>(null);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
+  
+  // Call states
+  const [isCallModalOpen, setIsCallModalOpen] = useState(false);
+  const [callOtherUser, setCallOtherUser] = useState<UserProfile | null>(null);
+  const [isIncomingCall, setIsIncomingCall] = useState(false);
+  const [incomingCallData, setIncomingCallData] = useState<Call | undefined>(undefined);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
@@ -72,25 +79,61 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Listen for incoming calls
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(db, 'calls'),
+      where('receiverId', '==', user.uid),
+      where('status', '==', 'offering'),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      if (!snapshot.empty) {
+        const callData = snapshot.docs[0].data() as Call;
+        // Fetch caller profile
+        const callerDoc = await getDoc(doc(db, 'users', callData.callerId));
+        if (callerDoc.exists()) {
+          setCallOtherUser(callerDoc.data() as UserProfile);
+          setIncomingCallData(callData);
+          setIsIncomingCall(true);
+          setIsCallModalOpen(true);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const handleStartCall = (otherUser: UserProfile) => {
+    setCallOtherUser(otherUser);
+    setIsIncomingCall(false);
+    setIncomingCallData(undefined);
+    setIsCallModalOpen(true);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f0f2f5] flex flex-col items-center justify-center">
         <motion.div
-          animate={{ scale: [1, 1.1, 1] }}
-          transition={{ repeat: Infinity, duration: 1.5 }}
-          className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-emerald-200"
+          animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }}
+          transition={{ repeat: Infinity, duration: 2 }}
+          className="w-20 h-20 bg-emerald-600 rounded-3xl flex items-center justify-center mb-8 shadow-2xl shadow-emerald-200"
         >
-          <MessageSquare className="text-white w-8 h-8" />
+          <MessageSquare className="text-white w-10 h-10" />
         </motion.div>
-        <div className="w-48 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+        <div className="w-56 h-1.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
           <motion.div 
             initial={{ x: '-100%' }}
             animate={{ x: '100%' }}
-            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-            className="w-full h-full bg-emerald-500"
+            transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+            className="w-full h-full bg-emerald-600"
           />
         </div>
-        <p className="mt-4 text-slate-500 text-sm font-medium">WhisperChat is loading...</p>
+        <p className="mt-6 text-slate-500 text-sm font-bold tracking-widest uppercase">Opchat is loading</p>
       </div>
     );
   }
@@ -101,9 +144,9 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="h-screen bg-[#f0f2f5] flex items-center justify-center overflow-hidden">
+      <div className="h-screen bg-[#f0f2f5] flex items-center justify-center overflow-hidden font-sans">
         {/* Main Container */}
-        <div className="w-full h-full md:w-[95%] md:h-[95%] md:max-w-[1600px] bg-white shadow-2xl md:rounded-lg flex overflow-hidden relative">
+        <div className="w-full h-full md:w-[98%] md:h-[96%] md:max-w-[1700px] bg-white shadow-2xl md:rounded-[2rem] flex overflow-hidden relative border border-slate-200/50">
           
           {/* Sidebar - Hidden on mobile when chat is active */}
           <div className={`${activeChat ? 'hidden md:flex' : 'flex'} w-full md:w-auto h-full`}>
@@ -121,19 +164,37 @@ export default function App() {
               <ChatWindow 
                 chat={activeChat} 
                 onBack={() => setActiveChat(null)}
+                onCall={() => activeChat.otherUser && handleStartCall(activeChat.otherUser)}
               />
             ) : (
-              <div className="flex-1 h-full bg-[#f8f9fa] flex flex-col items-center justify-center p-8 text-center border-b-[6px] border-emerald-500">
-                <div className="w-24 h-24 bg-slate-200 rounded-full flex items-center justify-center mb-6">
-                  <MessageSquare className="text-slate-400 w-12 h-12" />
-                </div>
-                <h2 className="text-2xl font-light text-slate-600 mb-2">WhisperChat for Web</h2>
-                <p className="text-sm text-slate-500 max-w-md leading-relaxed">
-                  Send and receive messages without using your phone number. 
-                  Your messages are end-to-end encrypted for your privacy.
-                </p>
-                <div className="mt-auto flex items-center gap-2 text-slate-400 text-xs">
-                  <Lock size={12} />
+              <div className="flex-1 h-full bg-[#f8f9fa] flex flex-col items-center justify-center p-12 text-center relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-50 rounded-full -mr-48 -mt-48 blur-3xl opacity-50"></div>
+                <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-50 rounded-full -ml-48 -mb-48 blur-3xl opacity-50"></div>
+                
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="relative z-10"
+                >
+                  <div className="w-28 h-28 bg-white shadow-xl rounded-[2rem] flex items-center justify-center mx-auto mb-8 border border-slate-100">
+                    <MessageSquare className="text-emerald-600 w-12 h-12" />
+                  </div>
+                  <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Opchat for Web</h2>
+                  <p className="text-slate-500 max-w-md leading-relaxed text-lg font-medium">
+                    Experience professional-grade, end-to-end encrypted messaging. 
+                    No phone numbers. Pure privacy.
+                  </p>
+                  
+                  <button 
+                    onClick={() => setIsNewChatModalOpen(true)}
+                    className="mt-10 px-8 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 active:scale-95"
+                  >
+                    Start a New Conversation
+                  </button>
+                </motion.div>
+
+                <div className="absolute bottom-12 flex items-center gap-3 text-slate-400 text-sm font-bold uppercase tracking-widest">
+                  <Shield className="w-4 h-4 text-emerald-500" />
                   End-to-end encrypted
                 </div>
               </div>
@@ -165,6 +226,16 @@ export default function App() {
               }
             }}
           />
+
+          {callOtherUser && (
+            <CallModal
+              isOpen={isCallModalOpen}
+              onClose={() => setIsCallModalOpen(false)}
+              otherUser={callOtherUser}
+              isIncoming={isIncomingCall}
+              incomingCallData={incomingCallData}
+            />
+          )}
         </div>
       </div>
     </ErrorBoundary>

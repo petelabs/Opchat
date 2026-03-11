@@ -69,31 +69,33 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectChat, activeChatId, userProfi
   return (
     <div className="w-full md:w-[400px] h-full flex flex-col bg-white border-r border-slate-200">
       {/* Header */}
-      <div className="h-16 bg-[#f0f2f5] flex items-center justify-between px-4 shrink-0">
+      <div className="h-16 bg-[#f0f2f5] flex items-center justify-between px-4 shrink-0 border-b border-slate-200">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-slate-300 overflow-hidden border border-white shadow-sm">
+          <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border border-white shadow-sm ring-2 ring-emerald-500/20">
             {userProfile.photoURL ? (
               <img src={userProfile.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
-              <User className="w-full h-full p-2 text-slate-500" />
+              <div className="w-full h-full flex items-center justify-center bg-emerald-100 text-emerald-600">
+                <User size={20} />
+              </div>
             )}
           </div>
           <div className="flex flex-col">
-             <span className="text-sm font-semibold text-slate-900 truncate max-w-[120px]">{userProfile.displayName}</span>
-             <span className="text-[10px] font-mono text-emerald-600 font-bold tracking-wider">{userProfile.shortId}</span>
+             <span className="text-sm font-bold text-slate-900 truncate max-w-[120px]">{userProfile.displayName}</span>
+             <span className="text-[10px] font-mono text-emerald-600 font-black tracking-wider uppercase">{userProfile.shortId}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button 
             onClick={onNewChat}
-            className="p-2 text-slate-600 hover:bg-slate-200 rounded-full transition-colors"
+            className="p-2.5 text-slate-600 hover:bg-slate-200 rounded-full transition-all active:scale-90"
             title="New Chat"
           >
             <MessageSquarePlus size={20} />
           </button>
           <button 
             onClick={() => auth.signOut()}
-            className="p-2 text-slate-600 hover:bg-slate-200 rounded-full transition-colors"
+            className="p-2.5 text-slate-600 hover:bg-slate-200 rounded-full transition-all active:scale-90"
             title="Sign Out"
           >
             <LogOut size={20} />
@@ -102,13 +104,13 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectChat, activeChatId, userProfi
       </div>
 
       {/* Search */}
-      <div className="p-2 bg-white border-b border-slate-100">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+      <div className="p-3 bg-white">
+        <div className="relative group">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
           <input
             type="text"
             placeholder="Search or start new chat"
-            className="w-full pl-10 pr-4 py-2 bg-[#f0f2f5] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+            className="w-full pl-10 pr-4 py-2.5 bg-[#f0f2f5] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all border border-transparent focus:border-emerald-500/30"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -138,33 +140,38 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectChat, activeChatId, userProfi
                 key={chat.chatId}
                 onClick={() => onSelectChat(chat)}
                 className={cn(
-                  "w-full flex items-center gap-3 p-3 hover:bg-[#f5f6f6] transition-colors text-left",
+                  "w-full flex items-center gap-3 p-4 hover:bg-[#f5f6f6] transition-all text-left relative",
                   activeChatId === chat.chatId && "bg-[#ebebeb]"
                 )}
               >
-                <div className="w-12 h-12 rounded-full bg-slate-200 overflow-hidden shrink-0">
+                <div className="w-14 h-14 rounded-full bg-slate-100 overflow-hidden shrink-0 shadow-sm">
                   {chat.otherUser?.photoURL ? (
                     <img src={chat.otherUser.photoURL} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
-                    <User className="w-full h-full p-3 text-slate-400" />
+                    <div className="w-full h-full flex items-center justify-center bg-slate-200 text-slate-500">
+                      <User size={24} />
+                    </div>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-baseline">
-                    <h3 className="text-sm font-semibold text-slate-900 truncate">
+                  <div className="flex justify-between items-baseline mb-1">
+                    <h3 className="text-[15px] font-bold text-slate-900 truncate">
                       {chat.otherUser?.displayName || 'Unknown User'}
                     </h3>
-                    <span className="text-[10px] text-slate-500">
+                    <span className="text-[11px] font-medium text-slate-500">
                       {chat.updatedAt?.toDate ? formatDistanceToNow(chat.updatedAt.toDate(), { addSuffix: false }) : ''}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-500 truncate mt-0.5 italic">
+                    <p className="text-[13px] text-slate-500 truncate leading-tight">
                       {chat.lastMessage ? 'Encrypted message' : 'Start chatting...'}
                     </p>
-                    <span className="text-[9px] font-mono text-slate-400 ml-2">{chat.otherUser?.shortId}</span>
+                    <span className="text-[10px] font-mono font-black text-emerald-600/60 ml-2 uppercase tracking-tighter">{chat.otherUser?.shortId}</span>
                   </div>
                 </div>
+                {activeChatId === chat.chatId && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></div>
+                )}
               </button>
             ))}
           </div>

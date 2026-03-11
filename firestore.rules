@@ -122,5 +122,17 @@ service cloud.firestore {
         // Messages are immutable
       }
     }
+
+    match /calls/{callId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.callerId || request.auth.uid == resource.data.receiverId);
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.callerId;
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.callerId || request.auth.uid == resource.data.receiverId);
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.callerId || request.auth.uid == resource.data.receiverId);
+
+      match /candidates/{candidateId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+      }
+    }
   }
 }

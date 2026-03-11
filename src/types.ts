@@ -31,6 +31,23 @@ export enum OperationType {
   WRITE = 'write',
 }
 
+export interface Call {
+  callId: string;
+  callerId: string;
+  receiverId: string;
+  status: 'offering' | 'answering' | 'active' | 'ended' | 'rejected';
+  type: 'audio' | 'video';
+  offer?: any;
+  answer?: any;
+  createdAt: any;
+}
+
+export interface IceCandidate {
+  candidate: any;
+  senderId: string;
+  timestamp: any;
+}
+
 export interface FirestoreErrorInfo {
   error: string;
   operationType: OperationType;
