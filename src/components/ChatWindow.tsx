@@ -5,16 +5,11 @@ import { ChatMetadata, Message, OperationType } from '../types';
 import { handleFirestoreError } from '../utils/error-handler';
 import { encryptMessage, decryptMessage } from '../utils/crypto';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, User, MoreVertical, Shield, Lock, ArrowLeft, Paperclip, Smile, Check, CheckCheck, Search, Video, Image as ImageIcon, X, Users } from 'lucide-react';
+import { Send, User, MoreVertical, Shield, Lock, ArrowLeft, Paperclip, Smile, Check, CheckCheck, Search, Video, Image as ImageIcon, X, Users, Phone } from 'lucide-react';
 import { format } from 'date-fns';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { cn } from '../utils/cn';
 import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
 
 interface ChatWindowProps {
   chat: ChatMetadata;
@@ -127,16 +122,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onCall }) => {
 
   return (
     <div className="flex-1 h-full flex flex-col bg-[#efeae2] dark:bg-slate-950 relative overflow-hidden transition-colors duration-500">
-      {/* Background Pattern Overlay */}
-      <div className="absolute inset-0 opacity-[0.06] dark:opacity-[0.02] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+      {/* Background Pattern Overlay - WhatsApp style doodle */}
+      <div 
+        className="absolute inset-0 opacity-[0.08] dark:opacity-[0.03] pointer-events-none"
+        style={{ 
+          backgroundImage: `url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')`,
+          backgroundSize: '400px'
+        }}
+      ></div>
 
       {/* Header */}
-      <div className="h-16 bg-[#f0f2f5] dark:bg-slate-800/90 backdrop-blur-md flex items-center justify-between px-4 shrink-0 border-b border-slate-200 dark:border-slate-800 z-10 shadow-sm">
+      <div className="h-16 bg-white dark:bg-slate-900 flex items-center justify-between px-4 shrink-0 z-10 shadow-sm border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="md:hidden p-2 -ml-2 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-all active:scale-90">
+          <button onClick={onBack} className="md:hidden p-2 -ml-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-90">
             <ArrowLeft size={20} />
           </button>
-          <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden border border-white dark:border-slate-600 shadow-sm ring-2 ring-emerald-500/10">
+          <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden border border-slate-100 dark:border-slate-700">
             {chat.isGroup ? (
               chat.groupPhotoURL ? (
                 <img src={chat.groupPhotoURL} alt="Group" className="w-full h-full object-cover" />
@@ -158,25 +159,33 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onCall }) => {
               {chat.isGroup ? chat.groupName : chat.otherUser?.displayName}
             </span>
             <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 uppercase tracking-wider">
-              <Shield size={10} className="fill-emerald-600/20" />
-              {chat.isGroup ? `${chat.participants.length} members` : `Secure ID: ${chat.otherUser?.shortId}`}
+              {chat.isGroup ? `${chat.participants.length} members` : 'Online'}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-1">
           {!chat.isGroup && (
-            <button 
-              onClick={() => onCall('video')}
-              className="p-2.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-full transition-all active:scale-90"
-              title="Video Call"
-            >
-              <Video size={20} />
-            </button>
+            <>
+              <button 
+                onClick={() => onCall('video')}
+                className="p-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-90"
+                title="Video Call"
+              >
+                <Video size={20} />
+              </button>
+              <button 
+                onClick={() => onCall('audio')}
+                className="p-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-90"
+                title="Voice Call"
+              >
+                <Phone size={20} />
+              </button>
+            </>
           )}
-          <button className="p-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-all active:scale-90">
+          <button className="p-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-90">
             <Search size={20} />
           </button>
-          <button className="p-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-all active:scale-90">
+          <button className="p-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-90">
             <MoreVertical size={20} />
           </button>
         </div>
@@ -185,12 +194,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onCall }) => {
       {/* Messages */}
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-4 md:px-12 space-y-3 z-10 scrollbar-hide"
+        className="flex-1 overflow-y-auto p-4 md:px-12 space-y-2 z-10 scrollbar-hide"
       >
         <div className="flex justify-center mb-6">
-          <div className="bg-[#fff9c2]/90 dark:bg-slate-800/90 backdrop-blur-sm text-[11px] text-slate-700 dark:text-slate-300 px-4 py-1.5 rounded-xl shadow-sm flex items-center gap-2 border border-[#e6e0a4] dark:border-slate-700 font-medium max-w-[90%] text-center">
-            <Lock size={12} className="shrink-0" />
-            Messages are end-to-end encrypted. No one outside of this chat, not even Opchat, can read them.
+          <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm text-[11px] text-slate-500 dark:text-slate-400 px-4 py-1.5 rounded-xl shadow-sm flex items-center gap-2 border border-slate-100 dark:border-slate-700 font-bold uppercase tracking-widest">
+            <Lock size={12} className="shrink-0 text-emerald-500" />
+            End-to-end encrypted
           </div>
         </div>
 
@@ -202,7 +211,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onCall }) => {
           messages.map((msg, idx) => {
             const isMe = msg.senderId === auth.currentUser?.uid;
             const decrypted = decryptMessage(msg.encryptedContent, chat.chatId);
-            const time = msg.timestamp?.toDate ? format(msg.timestamp.toDate(), 'HH:mm') : '';
+            const time = msg.timestamp?.toDate ? format(msg.timestamp.toDate(), 'h:mm a') : '';
 
             return (
               <motion.div
@@ -216,9 +225,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onCall }) => {
               >
                 <div
                   className={cn(
-                    "max-w-[85%] md:max-w-[70%] px-3.5 py-2 rounded-2xl shadow-sm relative group",
+                    "max-w-[85%] md:max-w-[70%] px-2.5 py-1.5 rounded-xl shadow-sm relative group",
                     isMe 
-                      ? "bg-[#d9fdd3] dark:bg-emerald-600 dark:text-white rounded-tr-none" 
+                      ? "bg-[#d9fdd3] dark:bg-emerald-700 dark:text-white rounded-tr-none" 
                       : "bg-white dark:bg-slate-800 dark:text-white rounded-tl-none border border-slate-100 dark:border-slate-700"
                   )}
                 >
@@ -241,7 +250,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onCall }) => {
                     </a>
                   ) : (
                     <p className={cn(
-                      "text-[14.5px] whitespace-pre-wrap break-words pr-14 leading-relaxed",
+                      "text-[14px] whitespace-pre-wrap break-words pr-16 leading-relaxed",
                       isMe ? "text-slate-900 dark:text-white" : "text-slate-900 dark:text-white"
                     )}>
                       {decrypted}
@@ -250,12 +259,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onCall }) => {
                   <div className="absolute bottom-1 right-2 flex items-center gap-1">
                     <span className={cn(
                       "text-[10px] font-medium",
-                      isMe ? "text-slate-500 dark:text-emerald-100" : "text-slate-500 dark:text-slate-400"
+                      isMe ? "text-emerald-700/60 dark:text-emerald-100/60" : "text-slate-400 dark:text-slate-500"
                     )}>
                       {time}
                     </span>
                     {isMe && (
-                      <span className={isMe ? "text-[#53bdeb] dark:text-emerald-200" : "text-[#53bdeb]"}>
+                      <span className="text-emerald-500">
                         <CheckCheck size={14} />
                       </span>
                     )}
@@ -269,18 +278,20 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onCall }) => {
       </div>
 
       {/* Input */}
-      <div className="bg-[#f0f2f5] dark:bg-slate-800/90 backdrop-blur-md p-3 shrink-0 border-t border-slate-200 dark:border-slate-800 z-10">
+      <div className="bg-white dark:bg-slate-900 p-3 shrink-0 z-10">
         <form onSubmit={handleSendMessage} className="flex items-center gap-2 max-w-5xl mx-auto">
-          <button type="button" className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors">
-            <Smile size={24} />
-          </button>
-          <button 
-            type="button" 
-            onClick={() => fileInputRef.current?.click()}
-            className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors"
-          >
-            <Paperclip size={24} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button type="button" className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+              <Smile size={24} />
+            </button>
+            <button 
+              type="button" 
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+            >
+              <Paperclip size={24} />
+            </button>
+          </div>
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -293,13 +304,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onCall }) => {
             <input
               type="text"
               placeholder="Type a message"
-              className="w-full bg-white dark:bg-slate-900 dark:text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none shadow-sm border border-transparent focus:border-emerald-500 transition-all"
+              className="w-full bg-slate-100 dark:bg-slate-800 dark:text-white rounded-2xl px-4 py-3 text-sm focus:outline-none transition-all"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               disabled={isUploading}
             />
             {isUploading && (
-              <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 rounded-xl flex items-center justify-center">
+              <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 rounded-2xl flex items-center justify-center">
                 <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             )}
@@ -309,10 +320,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onCall }) => {
             type="submit"
             disabled={(!newMessage.trim() && !isUploading) || isUploading}
             className={cn(
-              "p-3 rounded-full transition-all shadow-md",
+              "p-3 rounded-full transition-all shadow-lg",
               (newMessage.trim() || isUploading)
                 ? "bg-emerald-600 text-white hover:bg-emerald-700 active:scale-90" 
-                : "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-500 cursor-not-allowed"
+                : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed"
             )}
           >
             <Send size={20} />

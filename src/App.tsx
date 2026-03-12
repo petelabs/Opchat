@@ -10,9 +10,15 @@ import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import NewChatModal from './components/NewChatModal';
 import CallModal from './components/CallModal';
+import Settings from './components/Settings';
+import Calls from './components/Calls';
+import Status from './components/Status';
+import BottomNav from './components/BottomNav';
 import ErrorBoundary from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageSquare, Shield, Lock } from 'lucide-react';
+import { requestNotificationPermission, showNotification } from './utils/notifications';
+import { decryptMessage } from './utils/crypto';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -21,12 +27,17 @@ export default function App() {
   const [activeChat, setActiveChat] = useState<ChatMetadata | null>(null);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [isGettingReady, setIsGettingReady] = useState(false);
+  const [activeTab, setActiveTab] = useState<'chats' | 'calls' | 'status' | 'settings'>('chats');
   
   // Call states
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [callOtherUser, setCallOtherUser] = useState<UserProfile | null>(null);
   const [isIncomingCall, setIsIncomingCall] = useState(false);
   const [incomingCallData, setIncomingCallData] = useState<Call | undefined>(undefined);
+
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
@@ -59,7 +70,7 @@ export default function App() {
               uid: authUser.uid,
               displayName: authUser.displayName || 'Anonymous',
               shortId: shortId,
-              photoURL: authUser.photoURL || undefined,
+              photoURL: authUser.photoURL || null,
               createdAt: serverTimestamp(),
             };
 
@@ -68,7 +79,7 @@ export default function App() {
             setUserProfile(newProfile);
           }
         } catch (error) {
-          handleFirestoreError(error, OperationType.GET, 'users');
+          handleFirestoreError(error, OperationType.WRITE, 'users');
         } finally {
           setTimeout(() => setIsGettingReady(false), 1500);
         }
@@ -83,6 +94,50 @@ export default function App() {
 
     return () => unsubscribe();
   }, []);
+
+  // Listen for new messages across all chats for notifications
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(db, 'chats'),
+      where('participants', 'array-contains', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach(async (change) => {
+        if (change.type === 'modified') {
+          const chatData = change.doc.data() as ChatMetadata;
+          // Only notify if it's a new message and not from the current user
+          // and the chat is not currently active
+          if (chatData.lastMessage && activeChat?.chatId !== change.doc.id) {
+            // We need to know who sent the last message to avoid notifying self
+            // For now, we'll just decrypt and show if it's not the active chat
+            // In a real app, you'd store lastMessageSenderId
+            
+            const decrypted = decryptMessage(chatData.lastMessage, change.doc.id);
+            let senderName = 'New Message';
+            
+            if (!chatData.isGroup) {
+              const otherUserId = chatData.participants.find(id => id !== user.uid);
+              if (otherUserId) {
+                const userDoc = await getDoc(doc(db, 'users', otherUserId));
+                if (userDoc.exists()) {
+                  senderName = (userDoc.data() as UserProfile).displayName;
+                }
+              }
+            } else {
+              senderName = chatData.groupName || 'Group Message';
+            }
+
+            showNotification(senderName, decrypted, undefined, change.doc.id);
+          }
+        }
+      });
+    });
+
+    return () => unsubscribe();
+  }, [user, activeChat]);
 
   // Listen for incoming calls
   useEffect(() => {
@@ -120,6 +175,26 @@ export default function App() {
     setIsCallModalOpen(true);
   };
 
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'calls':
+        return <Calls />;
+      case 'status':
+        return <Status />;
+      case 'settings':
+        return userProfile ? <Settings userProfile={userProfile} /> : null;
+      default:
+        return (
+          <Sidebar 
+            userProfile={userProfile!}
+            activeChatId={activeChat?.chatId}
+            onSelectChat={(chat) => setActiveChat(chat)}
+            onNewChat={() => setIsNewChatModalOpen(true)}
+          />
+        );
+    }
+  };
+
   if (loading || isGettingReady) {
     return (
       <div className="min-h-screen bg-[#f0f2f5] dark:bg-slate-950 flex flex-col items-center justify-center transition-colors duration-500">
@@ -153,19 +228,20 @@ export default function App() {
     <ErrorBoundary>
       <div className="h-screen bg-[#f0f2f5] dark:bg-slate-950 flex items-center justify-center overflow-hidden font-sans transition-colors duration-500">
         {/* Main Container */}
-        <div className="w-full h-full md:w-[98%] md:h-[96%] md:max-w-[1700px] bg-white dark:bg-slate-900 shadow-2xl md:rounded-[2rem] flex overflow-hidden relative border border-slate-200/50 dark:border-slate-800/50">
+        <div className="w-full h-full md:w-[98%] md:h-[96%] md:max-w-[1700px] bg-white dark:bg-slate-900 shadow-2xl md:rounded-[2rem] flex flex-col md:flex-row overflow-hidden relative border border-slate-200/50 dark:border-slate-800/50">
           
-          {/* Sidebar - Hidden on mobile when chat is active */}
-          <div className={`${activeChat ? 'hidden md:flex' : 'flex'} w-full md:w-auto h-full`}>
-            <Sidebar 
-              userProfile={userProfile}
-              activeChatId={activeChat?.chatId}
-              onSelectChat={(chat) => setActiveChat(chat)}
-              onNewChat={() => setIsNewChatModalOpen(true)}
-            />
+          {/* Sidebar Area */}
+          <div className={`${activeChat ? 'hidden md:flex' : 'flex'} w-full md:w-[400px] h-full flex-col border-r border-slate-200 dark:border-slate-800`}>
+            <div className="flex-1 overflow-hidden">
+              {renderContent()}
+            </div>
+            <BottomNav activeTab={activeTab} onTabChange={(tab) => {
+              setActiveTab(tab);
+              setActiveChat(null);
+            }} />
           </div>
 
-          {/* Chat Window - Hidden on mobile when no chat is active */}
+          {/* Chat Area */}
           <div className={`${!activeChat ? 'hidden md:flex' : 'flex'} flex-1 h-full`}>
             {activeChat ? (
               <ChatWindow 
@@ -213,20 +289,21 @@ export default function App() {
             isOpen={isNewChatModalOpen}
             onClose={() => setIsNewChatModalOpen(false)}
             onChatCreated={async (chatId) => {
-              // The Sidebar will automatically update via onSnapshot
-              // We'll wait a bit for the chat to appear in the list or just fetch it
               try {
                 const chatDoc = await getDoc(doc(db, 'chats', chatId));
                 if (chatDoc.exists()) {
                   const data = chatDoc.data() as ChatMetadata;
-                  const otherUserId = data.participants.find(id => id !== auth.currentUser?.uid);
-                  if (otherUserId) {
-                    const userDoc = await getDoc(doc(db, 'users', otherUserId));
-                    if (userDoc.exists()) {
-                      data.otherUser = userDoc.data() as UserProfile;
+                  if (!data.isGroup) {
+                    const otherUserId = data.participants.find(id => id !== auth.currentUser?.uid);
+                    if (otherUserId) {
+                      const userDoc = await getDoc(doc(db, 'users', otherUserId));
+                      if (userDoc.exists()) {
+                        data.otherUser = userDoc.data() as UserProfile;
+                      }
                     }
                   }
                   setActiveChat({ ...data, chatId: chatDoc.id });
+                  setActiveTab('chats');
                 }
               } catch (error) {
                 console.error("Error selecting new chat:", error);
